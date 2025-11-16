@@ -86,20 +86,47 @@ risk_labels = ['Low Risk', 'Medium Risk', 'High Risk']
 risk_categories = pd.cut(airline_totals, bins=risk_bins, labels=risk_labels)
 df_long['risk_category'] = df_long['airline'].map(risk_categories).fillna('Low Risk')
 
-# Improvement status
-airline_period_summary = df_long.groupby(['airline', 'period'])['value'].sum().unstack()
-if '1985-1999' in airline_period_summary.columns and '2000-2014' in airline_period_summary.columns:
-    airline_period_summary['improvement_status'] = np.where(
-        airline_period_summary['2000-2014'] < airline_period_summary['1985-1999'],
-        'Improved', 
-        'Worsened'
-    )
-else:
-    airline_period_summary['improvement_status'] = 'No Data'
+# PROPER IMPROVEMENT CALCULATION - Based on rates rather than absolute values
+# Calculate improvement based on incident and fatality rates
+improvement_data = df_wide[['airline', 'incident_rate_1985_1999', 'incident_rate_2000_2014', 
+                           'fatality_rate_1985_1999', 'fatality_rate_2000_2014']].copy()
 
-df_long['improvement_status'] = df_long['airline'].map(
-    airline_period_summary['improvement_status']
-).fillna('No Data')
+# Calculate percentage change for incidents and fatalities
+improvement_data['incident_rate_change_pct'] = (
+    (improvement_data['incident_rate_2000_2014'] - improvement_data['incident_rate_1985_1999']) / 
+    improvement_data['incident_rate_1985_1999'] * 100
+).fillna(0)
+
+improvement_data['fatality_rate_change_pct'] = (
+    (improvement_data['fatality_rate_2000_2014'] - improvement_data['fatality_rate_1985_1999']) / 
+    improvement_data['fatality_rate_1985_1999'] * 100
+).fillna(0)
+
+# Combined improvement score (negative change means improvement)
+improvement_data['improvement_score'] = (
+    improvement_data['incident_rate_change_pct'] * 0.6 + 
+    improvement_data['fatality_rate_change_pct'] * 0.4
+)
+
+# Categorize improvement status
+def categorize_improvement(row):
+    if row['improvement_score'] < -20:  # Significant improvement
+        return 'Significantly Improved'
+    elif row['improvement_score'] < 0:   # Moderate improvement
+        return 'Improved'
+    elif row['improvement_score'] == 0:  # No change
+        return 'No Change'
+    elif row['improvement_score'] <= 20: # Moderate worsening
+        return 'Worsened'
+    else:                                # Significant worsening
+        return 'Significantly Worsened'
+
+improvement_data['improvement_status'] = improvement_data.apply(categorize_improvement, axis=1)
+
+# Map improvement status back to main dataframes
+improvement_status_map = improvement_data.set_index('airline')['improvement_status']
+df_long['improvement_status'] = df_long['airline'].map(improvement_status_map).fillna('No Change')
+df_wide['improvement_status'] = df_wide['airline'].map(improvement_status_map).fillna('No Change')
 
 # Get unique values for filters
 available_periods = sorted([p for p in df_long['period'].unique() if pd.notna(p)])
@@ -107,3 +134,20 @@ available_metrics = sorted([m for m in df_long['metric_type'].unique() if pd.not
 available_risk_categories = sorted([r for r in df_long['risk_category'].unique() if pd.notna(r)])
 available_improvement_status = sorted([i for i in df_long['improvement_status'].unique() if pd.notna(i)])
 available_airlines = sorted([a for a in df_long['airline'].unique() if pd.notna(a)])
+
+# Calculate key metrics for the cards
+total_airlines = len(df_wide)
+total_incidents = df_long[df_long['metric_type'] == 'incidents']['value'].sum()
+total_fatalities = df_long[df_long['metric_type'] == 'fatalities']['value'].sum()
+avg_safety_score = df_wide['safety_score'].mean()
+improved_airlines = len(improvement_data[improvement_data['improvement_status'].str.contains('Improved')])
+worsened_airlines = len(improvement_data[improvement_data['improvement_status'].str.contains('Worsened')])
+
+key_metrics = {
+    'total_airlines': total_airlines,
+    'total_incidents': total_incidents,
+    'total_fatalities': total_fatalities,
+    'avg_safety_score': avg_safety_score,
+    'improved_airlines': improved_airlines,
+    'worsened_airlines': worsened_airlines
+}
