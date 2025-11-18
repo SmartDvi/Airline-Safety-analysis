@@ -83,11 +83,15 @@ header = dmc.Paper(
                         ),
                         dmc.Group(
                             children=[
-                                dmc.ActionIcon(
-                                    DashIconify(icon="mdi:github", width=20),
-                                    variant="subtle",
-                                    color="white",
-                                    size="lg"
+                                dmc.Anchor(
+                                    dmc.ActionIcon(
+                                        DashIconify(icon="mdi:github", width=20),
+                                        variant="subtle",
+                                        color="white",
+                                        size="lg"
+                                    ),
+                                    href="https://github.com/SmartDvi/Airline-Safety-analysis", 
+                                    target="_blank"  
                                 ),
                                 dmc.ActionIcon(
                                     DashIconify(icon="mdi:information", width=20),
@@ -95,8 +99,8 @@ header = dmc.Paper(
                                     color="white",
                                     size="lg"
                                 )
-                            ]
-                        )
+    ]
+)
                     ]
                 )
             ]

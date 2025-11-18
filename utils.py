@@ -22,6 +22,8 @@ csv_path = os.path.join(current_dir, "airline-safety.csv")
 
 df = pd.read_csv(csv_path)
 
+#df = pd.read_csv("https://raw.githubusercontent.com/SmartDvi/Airline-Safety-analysis/refs/heads/main/airline-safety.csv")
+
 # Add calculated metrics
 df_wide = df.copy()
 df_wide["incident_rate_85_99"] = df_wide["incidents_85_99"] / df_wide["avail_seat_km_per_week"] * 1e9
