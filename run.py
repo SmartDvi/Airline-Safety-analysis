@@ -1,9 +1,10 @@
 import pandas as pd
 import dash_mantine_components as dmc
 import dash_ag_grid as dag
-from dash import Input, Output, callback, Dash, html, dcc
+from dash import Input, Output, callback, Dash, html, dcc, clientside_callback
 from dash_iconify import DashIconify
 import plotly.express as px
+from plotly import data
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
@@ -99,8 +100,8 @@ header = dmc.Paper(
                                     color="white",
                                     size="lg"
                                 )
-    ]
-)
+                            ]
+                        )
                     ]
                 )
             ]
@@ -407,9 +408,11 @@ def create_data_grid():
                             ),
                             dmc.Button(
                                 "Export Data",
+                                id="export_button",
                                 leftSection=DashIconify(icon="mdi:download", width=16),
                                 variant="outline",
-                                color="blue"
+                                color="blue",
+                                loading=False
                             )
                         ]
                     ),
@@ -428,7 +431,8 @@ def create_data_grid():
                             "pagination": True,
                             "paginationPageSize": 15,
                             "animateRows": True,
-                            "rowSelection": "multiple"
+                            "rowSelection": "multiple",
+                            "enableExport": True
                         },
                         columnSize="sizeToFit",
                         style={"height": "500px", "width": "100%", "borderRadius": "8px"}
@@ -481,6 +485,14 @@ def create_detailed_table():
                                         size="sm"
                                     )
                                 ]
+                            ),
+                            dmc.Button(
+                                "Export Detailed Data",
+                                id="detailed-export-button",
+                                leftSection=DashIconify(icon="mdi:download", width=16),
+                                variant="outline",
+                                color="blue",
+                                loading=False
                             )
                         ]
                     ),
@@ -499,7 +511,8 @@ def create_detailed_table():
                             "pagination": True,
                             "paginationPageSize": 20,
                             "animateRows": True,
-                            "rowSelection": "multiple"
+                            "rowSelection": "multiple",
+                            "enableExport": True
                         },
                         columnSize="sizeToFit",
                         style={"height": "500px", "width": "100%", "borderRadius": "8px"}
@@ -572,6 +585,12 @@ analytics_tabs = dmc.Tabs(
     id="analytics-tabs"
 )
 
+# Download components for server-side export
+download_components = html.Div([
+    dcc.Download(id="download-main-csv"),
+    dcc.Download(id="download-detailed-csv"),
+])
+
 # Main Layout
 app.layout = dmc.MantineProvider(
     forceColorScheme="light",
@@ -582,6 +601,7 @@ app.layout = dmc.MantineProvider(
             style={'minHeight': '100vh', 'backgroundColor': colors['background'], 'padding': '20px 0'},
             children=[
                 header,
+                download_components,  # Add download components
                 
                 # Key Metrics Cards
                 create_metrics_cards(),
@@ -640,6 +660,70 @@ app.layout = dmc.MantineProvider(
         )
     ]
 )
+
+# Client-side callbacks for export functionality
+clientside_callback(
+    """
+    function(n_clicks) {
+        if (n_clicks > 0) {
+            setTimeout(function() {
+                const grid = dash_ag_grid.getApi('airline-safety-grid');
+                if (grid) {
+                    grid.exportDataAsCsv({
+                        fileName: 'airline_safety_data.csv'
+                    });
+                }
+            }, 100);
+            return true;
+        }
+        return false;
+    }
+    """,
+    Output("export_button", "loading"),
+    Input("export_button", "n_clicks"),
+    prevent_initial_call=True
+)
+
+clientside_callback(
+    """
+    function(n_clicks) {
+        if (n_clicks > 0) {
+            setTimeout(function() {
+                const grid = dash_ag_grid.getApi('detailed-safety-grid');
+                if (grid) {
+                    grid.exportDataAsCsv({
+                        fileName: 'detailed_safety_records.csv'
+                    });
+                }
+            }, 100);
+            return true;
+        }
+        return false;
+    }
+    """,
+    Output("detailed-export-button", "loading"),
+    Input("detailed-export-button", "n_clicks"),
+    prevent_initial_call=True
+)
+
+# Server-side export callbacks (alternative method)
+@app.callback(
+    Output("download-main-csv", "data"),
+    Input("export_button", "n_clicks"),
+    prevent_initial_call=True
+)
+def export_main_data_server(n_clicks):
+    if n_clicks:
+        return dcc.send_data_frame(df_wide.to_csv, "airline_safety_data_full.csv", index=False)
+
+@app.callback(
+    Output("download-detailed-csv", "data"),
+    Input("detailed-export-button", "n_clicks"),
+    prevent_initial_call=True
+)
+def export_detailed_data_server(n_clicks):
+    if n_clicks:
+        return dcc.send_data_frame(df_long.to_csv, "detailed_safety_records_full.csv", index=False)
 
 # Callbacks for interactive charts
 @app.callback(
